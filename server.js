@@ -3,6 +3,7 @@ const Document = require('./Document');
 const Comment = require('./Comments');
 const User = require('./Users');
 const { v4: uuidv4 } = require('uuid');
+const {secretKey} = require('./Babi');
 
 // const redis = require('redis');
 
@@ -88,28 +89,39 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
-app.get("/", (req, resp) => {
+
+const checkToken = async (req, res, next) => { 
+    const token = req.headers.authorization;
+    if (!token) {
+        return res.status(401).send({ message: 'Token is required' });
+    }
+    
+    try {
+        // Misalkan kamu menggunakan JWT
+        const tokenOnly = token.replace('Bearer ', '');
+        const user = await User.findOne({ token: tokenOnly });
+        if (!user) {
+            return res.status(403).send({ message: 'Invalid token' });
+        }
+        next(); // Panggil next() jika token valid
+    } catch (error) {
+        console.log(error);
+        return res.status(403).send({ message: 'Invalid token' });
+    }
+};
+
+
+app.get("/", checkToken, (req, resp) => {
     resp.send("App is Working");
 });
 
-// app.get('/set250', async (req, res) => {
-//     await redisClient.set('mykey', '250', redis.print);
-//     res.send('Key set');
-// });
 
-// app.get('/get250', async (req, res) => {
-//     const value = await redisClient.get('mykey');
-//     res.send(value);
-// });
-
-
-app.get("/api/notes", async (req, resp) => {
+app.get("/api/notes", checkToken, async (req, resp) => {
     const documents = await Document.find();
     resp.json(documents);
 });
 
-app.post('/api/notes/delete', async (req, res) => {
-    console.log(req.body); 
+app.post('/api/notes/delete', checkToken, async (req, res) => {
     const notesId = req.body.id;
 
     await Document.deleteOne({ _id: notesId }).then(() => {
@@ -124,7 +136,7 @@ app.post('/api/notes/delete', async (req, res) => {
     });
 });
 
-app.post('/api/notes/edit', async (req, res) => {
+app.post('/api/notes/edit', checkToken, async (req, res) => {
     const notesId = req.body.id;
     const notesName = req.body.name;
 
@@ -146,7 +158,7 @@ app.post('/api/notes/edit', async (req, res) => {
     });
 });
 
-app.post('/api/notes/getNoteById', async (req, res) => {
+app.post('/api/notes/getNoteById', checkToken, async (req, res) => {
     const notesId = req.body.id;
 
     await Document.findById(notesId).then((result) => {
@@ -167,7 +179,7 @@ app.post('/api/notes/getNoteById', async (req, res) => {
     });
 });
 
-app.post('/api/notes/addWriteAccess', async (req, res) => {
+app.post('/api/notes/addWriteAccess', checkToken, async (req, res) => {
     const notesId = req.body.id;
     const email = req.body.email;
 
@@ -190,7 +202,7 @@ app.post('/api/notes/addWriteAccess', async (req, res) => {
         });
 });
 
-app.post('/api/notes/removeWriteAccess', async (req, res) => {
+app.post('/api/notes/removeWriteAccess', checkToken, async (req, res) => {
     const notesId = req.body.id;
     const email = req.body.email;
 
@@ -215,7 +227,7 @@ app.post('/api/notes/removeWriteAccess', async (req, res) => {
 
 
 
-app.post('/api/notes/addReadAccess', async (req, res) => {
+app.post('/api/notes/addReadAccess', checkToken, async (req, res) => {
     const notesId = req.body.id;
     const email = req.body.email;
 
@@ -239,7 +251,7 @@ app.post('/api/notes/addReadAccess', async (req, res) => {
         });
 });
 
-app.post('/api/notes/removeReadAccess', async (req, res) => {
+app.post('/api/notes/removeReadAccess', checkToken, async (req, res) => {
     const notesId = req.body.id;
     const email = req.body.email;
 
@@ -262,7 +274,7 @@ app.post('/api/notes/removeReadAccess', async (req, res) => {
         });
 });
 
-app.post('/api/notes/changePublicAccess', async (req, res) => {
+app.post('/api/notes/changePublicAccess', checkToken, async (req, res) => {
     const notesId = req.body.id;
     const access = req.body.access;
 
@@ -286,7 +298,7 @@ app.post('/api/notes/changePublicAccess', async (req, res) => {
     });
 });
 
-app.post('/api/notes/changePublicPermission', async (req, res) => {
+app.post('/api/notes/changePublicPermission', checkToken, async (req, res) => {
     const notesId = req.body.id;
     const permission = req.body.public_permission;
 
@@ -310,7 +322,7 @@ app.post('/api/notes/changePublicPermission', async (req, res) => {
     });
 });
 
-app.post('/api/comments/add', async (req, res) => {
+app.post('/api/comments/add', checkToken, async (req, res) => {
 
     try{
         const { document_id, owner, comment } = req.body;
@@ -325,7 +337,7 @@ app.post('/api/comments/add', async (req, res) => {
     
 });
 
-app.get('/api/comments/get', async (req, res) => {
+app.get('/api/comments/get', checkToken, async (req, res) => {
     try {
         const comments = await Comment.find();
         res.status(200).send(comments);
@@ -335,8 +347,19 @@ app.get('/api/comments/get', async (req, res) => {
     }
 });
 
+const validateEmail = (req, res, next) => {
+    const { email } = req.body; // Ambil email dari body
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // Regex untuk validasi email
 
-app.post('/api/users/add', async (req, res) => {
+    if (!email || !emailRegex.test(email)) {
+        return res.status(400).send({ message: 'Invalid email format' });
+    }
+    
+    next(); // Panggil next() jika validasi berhasil
+};
+
+
+app.post('/api/users/add', validateEmail, checkToken, async (req, res) => {
     try {
         const { name, password, email, major, token } = req.body;
         const user = await User.findOne({ email: email });
@@ -355,7 +378,7 @@ app.post('/api/users/add', async (req, res) => {
     }
 });
 
-app.post('/api/users/getByEmail', async (req, res) => {
+app.post('/api/users/getByEmail', validateEmail, checkToken, async (req, res) => {
     try {
         const email = req.body.email;
         const user = await User.findOne({ email:
