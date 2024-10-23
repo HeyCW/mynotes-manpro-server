@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
 const Document = require('./Document');
+const Comment = require('./Comments');
+const User = require('./Users');
+const { v4: uuidv4 } = require('uuid');
+
 // const redis = require('redis');
 
 // // Redis
@@ -78,6 +82,7 @@ async function findOrCreateDocument(id) {
 const express = require('express');
 const app = express();
 const cors = require("cors");
+const e = require('express');
 console.log("App listen at port 5000");
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -304,6 +309,64 @@ app.post('/api/notes/changePublicPermission', async (req, res) => {
         });
     });
 });
+
+app.post('/api/comments/add', async (req, res) => {
+
+    try{
+        const { document_id, owner, comment } = req.body;
+        const _id = uuidv4();
+        const newComment = { _id, document_id, owner, comment };
+        const makeComment = await Comment.create(newComment);   
+        res.status(201).send(makeComment);
+    }
+    catch (error) {
+        res.status(400).send(error);
+    }
+    
+});
+
+app.get('/api/comments/get', async (req, res) => {
+    try {
+        const comments = await Comment.find();
+        res.status(200).send(comments);
+    } catch (error) {
+        res
+        .status(400).send(error);
+    }
+});
+
+
+app.post('/api/users/add', async (req, res) => {
+    try {
+        const { name, password, email, major, token } = req.body;
+        const user = await User.findOne({ email: email });
+
+        if (user) {
+            res.status(400).send({ message: "User already exists" });
+            return;
+        }
+
+        const _id = uuidv4();
+        const newUser = { _id, name, password, email, major, token };
+        const makeUser = await User.create(newUser);
+        res.status(200).send(makeUser);
+    } catch (error) {
+        res.status(400).send(error);
+    }
+});
+
+app.post('/api/users/getByEmail', async (req, res) => {
+    try {
+        const email = req.body.email;
+        const user = await User.findOne({ email:
+            email });
+        res.status(200).send(user);
+    } catch (error) {
+        res.status(400).send(error);
+    }
+});
+
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
