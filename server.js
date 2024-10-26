@@ -3,7 +3,6 @@ const Document = require('./Document');
 const Comment = require('./Comments');
 const User = require('./Users');
 const { v4: uuidv4 } = require('uuid');
-const {secretKey} = require('./Babi');
 
 // const redis = require('redis');
 
@@ -54,7 +53,11 @@ io.on('connection', (socket) => {
     socket.on('save-document', async (documentId, name, owner, data) => {
         if (data != ''){
             const document = await Document.findById(documentId);
-            if ((!document.write_access || document.write_access.length === 0) && (!document.read_access || document.read_access.length === 0)){ 
+
+            if (document == null) {
+                return;
+            }
+            else if ((!document.write_access || document.write_access.length === 0) && (!document.read_access || document.read_access.length === 0)){ 
                 await Document.findByIdAndUpdate(documentId, { 
                     name, 
                     owner, 
@@ -92,6 +95,7 @@ app.use(cors());
 
 const checkToken = async (req, res, next) => { 
     const token = req.headers.authorization;
+
     if (!token) {
         return res.status(401).send({ message: 'Token is required' });
     }
@@ -119,6 +123,12 @@ app.get("/", checkToken, (req, resp) => {
 app.get("/api/notes", checkToken, async (req, resp) => {
     const documents = await Document.find();
     resp.json(documents);
+});
+
+app.post('/api/notes/getByOwner', checkToken, async (req, res) => {
+    const owner = req.body.owner;
+    const documents = await Document.find({ owner: owner });
+    res.json(documents);
 });
 
 app.post('/api/notes/delete', checkToken, async (req, res) => {
@@ -359,7 +369,7 @@ const validateEmail = (req, res, next) => {
 };
 
 
-app.post('/api/users/add', validateEmail, checkToken, async (req, res) => {
+app.post('/api/users/add', validateEmail, async (req, res) => {
     try {
         const { name, password, email, major, token } = req.body;
         const user = await User.findOne({ email: email });
@@ -378,11 +388,24 @@ app.post('/api/users/add', validateEmail, checkToken, async (req, res) => {
     }
 });
 
-app.post('/api/users/getByEmail', validateEmail, checkToken, async (req, res) => {
+app.post('/api/users/getByEmail', validateEmail, async (req, res) => {
     try {
         const email = req.body.email;
+        // console.log(email);
         const user = await User.findOne({ email:
             email });
+            // console.log(user);
+        res.status(200).send(user);
+    } catch (error) {
+        res.status(400).send(error);
+    }
+});
+
+app.post('/api/update/token', async (req, res) => {
+    try {
+        const { email, token } = req.body;
+        const user = await User
+        .findOneAndUpdate({ email: email }, { token: token }, { new: true });
         res.status(200).send(user);
     } catch (error) {
         res.status(400).send(error);
