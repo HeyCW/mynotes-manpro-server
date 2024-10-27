@@ -20,9 +20,10 @@ const { v4: uuidv4 } = require('uuid');
   
 //   initRedis();
 
+const mongodbUri = process.env.MONGODB_IP ? `mongodb://${process.env.MONGODB_IP}:27017/docs` : 'mongodb://localhost:27017/docs';
 
 // MongoDB
-mongoose.connect('mongodb://localhost:27017/docs');
+mongoose.connect(mongodbUri);
 
 
 const io = require('socket.io')(3001, {
