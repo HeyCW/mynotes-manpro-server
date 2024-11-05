@@ -13,7 +13,7 @@ const Document = new Schema({
         required: true,
     },
     owner: {
-        type: Object,
+        type: String,
         required: true,
     },
     public_access: {

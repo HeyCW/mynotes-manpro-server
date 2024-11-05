@@ -3,6 +3,8 @@ const Document = require('./Document');
 const Comment = require('./Comments');
 const User = require('./Users');
 const { v4: uuidv4 } = require('uuid');
+const cryptoJs = require('crypto-js');
+const secretKey = require('./babi');
 
 // const redis = require('redis');
 
@@ -28,7 +30,7 @@ mongoose.connect(mongodbUri);
 
 const io = require('socket.io')(3001, {
     cors: {
-        origin: "http://localhost:3000",
+        origin: "*",
         methods: ["GET", "POST"]
     }
 });
@@ -36,6 +38,7 @@ const io = require('socket.io')(3001, {
 io.on('connection', (socket) => {
 
     socket.on('get-document', async (documentId) => {
+        console.log("get-document");
         const document = await Document.findById(documentId);
         data =""
         namaNote = "Document";
@@ -47,9 +50,25 @@ io.on('connection', (socket) => {
         socket.emit('load-document', data, namaNote);        
     });
 
+    console.log(socket.id);
+    socket.on('message', (text) => {
+        console.log('Message received: ' + text);
+    });
+
     socket.on('send-changes', (documentId, delta) => {
         socket.broadcast.to(documentId).emit('receive-changes', delta);
     });
+
+    socket.on('send-changes-phone', (data) => {
+        const { documentId, delta } = data;
+        console.log(delta);
+        socket.broadcast.to(documentId).emit('receive-changes-phone', delta);
+    });
+
+    socket.on('join-room', (documentId) => {
+        console.log("join-room");
+        socket.join(documentId);
+    })
 
     socket.on('save-document', async (documentId, name, owner, data) => {
         if (data != ''){
@@ -75,6 +94,33 @@ io.on('connection', (socket) => {
             }
         }
     });
+
+    socket.on('save-document-phone', async (documentData) => {
+        const { documentId, name, owner, data } = documentData;
+
+        if (data != '') {
+            const document = await Document.findById(documentId);
+            if (document == null) {
+                await Document.create({ _id: documentId, name, owner, data, write_access: [], read_access: [] });
+            }
+            else if ((!document.write_access || document.write_access.length === 0) && (!document.read_access || document.read_access.length === 0)){ 
+                await Document.findByIdAndUpdate(documentId, { 
+                    name, 
+                    owner, 
+                    data, 
+                    write_access: [], 
+                    read_access: [] 
+                });
+            } else {
+                await Document.findByIdAndUpdate(documentId, { 
+                    name, 
+                    owner, 
+                    data 
+                });
+            }
+        }
+    });
+
 });
 
 async function findOrCreateDocument(id) {
@@ -401,6 +447,30 @@ app.post('/api/users/getByEmail', validateEmail, async (req, res) => {
         res.status(400).send(error);
     }
 });
+
+app.post('/api/users/getByEmail/phone', async (req, res) => {
+    try {
+        const email = req.body.email;
+        const user = await User.findOne({ email: email });
+
+        if (!user) {
+            return res.status(404).send({ message: 'User not found' });
+        }
+
+
+        // Dekripsi password
+        const decryptedPassword = cryptoJs.AES.decrypt(user.password, secretKey.secretKey).toString(cryptoJs.enc.Utf8);
+
+        // Kirim data pengguna tanpa password
+        const { password, ...userWithoutPassword } = user.toObject();
+        userWithoutPassword.password = decryptedPassword;
+        res.status(200).send(userWithoutPassword);
+    } catch (error) {
+        res.status(400).send({ error: error.message });
+    }
+});
+
+
 
 app.post('/api/update/token', async (req, res) => {
     try {
