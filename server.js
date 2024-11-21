@@ -75,7 +75,7 @@ io.on('connection', (socket) => {
             const document = await Document.findById(documentId);
 
             if (document == null) {
-                return;
+                await Document.create({ _id: documentId, name, owner, data, write_access: [], read_access: [] });
             }
             else if ((!document.write_access || document.write_access.length === 0) && (!document.read_access || document.read_access.length === 0)){ 
                 await Document.findByIdAndUpdate(documentId, { 
